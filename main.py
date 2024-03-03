@@ -190,6 +190,9 @@ def logic(stdscr):
                 if enable_monitor_mode(interface, True):
                     do_deuth_all(stdscr, selected_wifi, interface)
                     enable_monitor_mode(interface, False)
+                else:
+                    exit(-1)
+
         elif root_menu_pos == (len(root_menu_items) - 1):
             break
 
