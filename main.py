@@ -108,39 +108,48 @@ def enable_monitor_mode(interface, enable=True):
 
 def showWifiSelectionList(window, interface):
     wifis = []
-    window.clear()
-    window.addstr(">> Scraping wifi...", curses.color_pair(1))
-    window.refresh()
-    try:
-        result = subprocess.run(["iwlist", interface, "scan"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-        result = str(result.stdout)
-        result = result.split("Cell ")
+    window.timeout(500)
 
-        for wifi_fragment in result: 
-            found = re.findall(r"(?<=Address:\s)(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?<=ESSID:\").+\"|(?<=Channel:)\d+", wifi_fragment)
-            if found != []:
-                wifis.append(found)
-        # result = [' '.join(result[i:i+3]) for i in range(0, len(result), 3)]
-        # print(result)
+    while True:
+        window.clear()
+        window.addstr(">> Scraping wifi...", curses.color_pair(1))
+        window.refresh()
+        try:
+            result = subprocess.run(["iwlist", interface, "scan"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+            result = str(result.stdout)
+            result = result.split("Cell ")
 
-    except subprocess.CalledProcessError as e:
-        return False
+            for wifi_fragment in result: 
+                found = re.findall(r"(?<=Address:\s)(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?<=ESSID:\").+(?=\")|(?<=Channel:)\d+", wifi_fragment)
+                if found != []:
+                    wifis.append(found)
+            # result = [' '.join(result[i:i+3]) for i in range(0, len(result), 3)]
+            # print(result)
+            for wifi in wifis:
+                if len(wifi) != 3:
+                    wifi.insert(2, 'NO_NAME')
+
+            formatted = [f"{wifi[0]:20} {wifi[2]:50} {wifi[1]:2}" for wifi in wifis]
     
-    for wifi in wifis:
-        if len(wifi) != 3:
-            wifi.insert(2, 'NO_NAME')
+            selected_index = showMenuWithSelection(window, 0, formatted, f"  {'MAC':20} {'BSSID':50} {'CHANNEL':2}")
+            return wifis[selected_index]
+            
+        except subprocess.CalledProcessError as e:
+            window.clear()
+            window.addstr(">> No Connection, retrying... q - to exit", curses.color_pair(1))
+            key = window.getch()
+            if key == ord("q"):
+                break
+
+            continue
     
-    formatted = [f"{wifi[0]:20} {wifi[2]:50} {wifi[1]:2}" for wifi in wifis]
-    
-    selected_index = showMenuWithSelection(window, 0, formatted, f"  {'MAC':20} {'BSSID':50} {'CHANNEL':2}")
-    return wifis[selected_index]
 
 
 def do_deuth_all(window, wifi, interface):
     try:
         posPrint = 1
         window.clear()
-        window.timeout(-1)
+        window.timeout(200)
         window.addstr(0, 0, f"Changing channel of {interface} to {wifi[1]}")
         window.refresh()
         changeInterfaceChannel(interface, wifi[1])
@@ -155,7 +164,9 @@ def do_deuth_all(window, wifi, interface):
             window.addstr(2, 0, f"{posPrint} Sent deauth frame (q - to exit)", curses.color_pair(1))
             window.refresh()
             posPrint+=1
-            time.sleep(0.2)
+            key = window.getch()
+            if key == ord("q"):
+                break
     except:
         return
 
@@ -163,23 +174,24 @@ def logic(stdscr):
     curses.curs_set(0)
     root_menu_pos = 0
     interface = "wlo1"
+    while True:
+        root_menu_pos = showMenuWithSelection(stdscr, root_menu_pos, root_menu_items)
+        if root_menu_pos == 0:
+            selected_wifi = showWifiSelectionList(stdscr, interface)
 
-    root_menu_pos = showMenuWithSelection(stdscr, root_menu_pos, root_menu_items)
-    if root_menu_pos == 0:
-        selected_wifi = showWifiSelectionList(stdscr, interface)
-
-        if selected_wifi == False:
-            enable_monitor_mode(interface, False)
-        
-        selected_action = showMenuWithSelection(stdscr, 0, todo_items, "Actions:")
+            if selected_wifi == False:
+                continue
+            
+            selected_action = showMenuWithSelection(stdscr, 0, todo_items, "Actions:")
 
 
-        if selected_action == 0:
-          
-            if enable_monitor_mode(interface, True):
-                do_deuth_all(stdscr, selected_wifi, interface)
-                enable_monitor_mode(interface, False)
-
+            if selected_action == 0:
+            
+                if enable_monitor_mode(interface, True):
+                    do_deuth_all(stdscr, selected_wifi, interface)
+                    enable_monitor_mode(interface, False)
+        elif root_menu_pos == (len(root_menu_items) - 1):
+            break
 
 
 
